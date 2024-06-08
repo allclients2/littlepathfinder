@@ -16,9 +16,10 @@ function astar.new(grid, start, finish, heuristicfactor)
         pathfound = false;
         pathfailed = false;
         heuristicfactor = heuristicfactor;
+        bestnode = nil;
         grid = grid;
-        start = start,
-        finish = finish,
+        start = start;
+        finish = finish;
         frontier = {{start, mhdist(start.x, start.y, finish.x, finish.y), 0}},
     }, astar)
     self:makeexploredmap();
@@ -64,6 +65,7 @@ function astar:pushfrontier()
         end);
     
         local currentnode = table.remove(self.frontier, 1);
+        self.bestnode = currentnode;
 
         if not currentnode then
             self.pathfailed = true;

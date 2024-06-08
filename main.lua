@@ -2,40 +2,66 @@ local vec2 = require("vec2");
 local astarmod = require("astar");
 local timer = require("timer");
 
-local gridSize = 15;
-local heuristic = 0.1;
+local gridSize = 10;
+local heuristic = 0.3;
 
 local gridWidth, gridHeight;
 
 local astar;
 local grid;
 local reset;
+local start, finish;
+
+local colormap = {
+    [1] = {0.55, 0.55, 0.55},
+    [2] = {0.1, 0.8, 0.1},
+    [3] = {0.8, 0.1, 0.1},
+    [4] = {0.7, 0.7, 0.7},
+    [5] = {0.3, 0.8, 0.3},
+    [6] = {0.5, 0.5, 0.8},
+}
 
 math.randomseed(os.time())
 
-local function timedalgorithm()
+local function mhdist(x1, y1, x2, y2)
+    return math.abs(x1 - x2) + math.abs(y1 - y2);
+end
+
+local rand = math.random;
+
+local function timedsolve()
 	local sound = love.audio.newSource("beep.wav", "static");
     sound:setVolume(0.1);
     sound:setLooping(false);
 
+    local maxcostbestdiff = math.sqrt(gridWidth * gridHeight) * 2;
+    local alltimebest = nil;
+    local maxpitch = 1.5;
     local steps = 0;
     local timercurrent = timer.new(0.02); --upvalue
     return function ()
         if timercurrent:elapsed() then
             steps = steps + 0.05;
+
+            local costratio = astar.bestnode and (astar.bestnode[2] / mhdist(start.x, start.y, finish.x, finish.y)) or 0.5;
             if astar.pathfound then
                 astar:resolvepath();
                 sound:setPitch(0.6);
                 sound:play();
                 return true;
-            elseif astar.pathfailed then
+            elseif astar.pathfailed or (alltimebest and astar.bestnode and ((astar.bestnode[2] - alltimebest) > maxcostbestdiff)) then
                 sound:setPitch(0.1);
                 sound:play();
                 return true;
             end
+
+            if astar.bestnode and (not alltimebest or alltimebest > astar.bestnode[2]) then
+                alltimebest = astar.bestnode[2];
+            end
+
             astar:pushfrontier();
             timercurrent:reset();
-            sound:setPitch(steps);
+            sound:setPitch(maxpitch - (math.min(costratio, 1) * maxpitch) + 0.05);
             sound:play();
         end
     end
@@ -46,12 +72,11 @@ function reset(randomobstacules)
     for i = 1, gridWidth do
         grid[i] = {};
         for j = 1, gridHeight do
-            grid[i][j] = (randomobstacules and math.random() > 0.7) and 1 or 0;
+            grid[i][j] = (randomobstacules and math.random() > 0.6) and 1 or 0;
         end
     end
 
-    local rand = math.random;
-    local start, finish = vec2.new(rand(gridWidth), rand(gridHeight)), vec2.new(rand(gridWidth), rand(gridHeight));
+    start, finish = vec2.new(rand(gridWidth), rand(gridHeight)), vec2.new(rand(gridWidth), rand(gridHeight));
 
     astar = astarmod.new(grid, start, finish, heuristic);
 
@@ -60,14 +85,14 @@ function reset(randomobstacules)
 end
 
 local function automaticlooped()
-    local timed = timedalgorithm();
+    local timed = timedsolve();
     local timer, running = timer.new(1.8), false; --upvalue
     love.update = function ()
         if timed() then
             if running then
                 if timer:elapsed() then
                     reset(true);
-                    timed = timedalgorithm();
+                    timed = timedsolve();
                     running = false;
                 end
             else
@@ -79,7 +104,7 @@ local function automaticlooped()
 end
 
 local function automatic()
-    local timed = timedalgorithm();
+    local timed = timedsolve();
     love.update = function ()
         if timed() then
             love.update = nil;
@@ -102,6 +127,8 @@ function love.keypressed(key)
         reset(true);
     elseif key == "d" then
         automaticlooped();
+    elseif key == "x" then
+        love.update = nil;
     end
 end
 
@@ -147,23 +174,14 @@ end
 function love.draw()
     for i = 1, gridWidth do
         for j = 1, gridHeight do
-            if grid[i][j] == 1 then
-                love.graphics.setColor(0.1, 0.1, 0.1);
-            elseif grid[i][j] == 2 then
-                love.graphics.setColor(0.1, 0.8, 0.1);
-            elseif grid[i][j] == 3 then
-                love.graphics.setColor(0.8, 0.1, 0.1);
-            elseif grid[i][j] == 4 then
-                love.graphics.setColor(0.5, 0.5, 0.5);
-            elseif grid[i][j] == 5 then
-                love.graphics.setColor(0.3, 0.8, 0.3);
-            elseif grid[i][j] == 6 then
-                love.graphics.setColor(0.5, 0.5, 0.8);
+            if colormap[grid[i][j]] then
+                local color = colormap[grid[i][j]];
+                love.graphics.setColor(color[1], color[2], color[3]);
             else
-                love.graphics.setColor(0.75, 0.75, 0.75);
+                love.graphics.setColor(0.15, 0.15, 0.15);
             end
             love.graphics.rectangle("fill", (i - 1) * gridSize, (j - 1) * gridSize, gridSize, gridSize);
-            love.graphics.setColor(1, 1, 1);
+            love.graphics.setColor(.2, .2, .2);
             love.graphics.rectangle("line", (i - 1) * gridSize, (j - 1) * gridSize, gridSize, gridSize);
         end
     end
